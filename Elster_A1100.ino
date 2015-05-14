@@ -14,7 +14,8 @@ uint8_t waiting;
 long lp;
 #define BITS(t) (((t) + (BIT_PERIOD/2)) / BIT_PERIOD)
 
-void on_change(void) { 
+//void on_change(void) { 
+ ISR (INT0_vect) {
   unsigned long us = micros();
   unsigned long diff = us - last_us;
   const int PinS = digitalRead(intPin);
@@ -38,7 +39,9 @@ void setup() {
   in = out = waiting = lp = 0;
   last_us = micros();
   Serial.begin(115200);
-  attachInterrupt(0, on_change, RISING); //CHANGE RISING FALLING LOW
+  //attachInterrupt(0, on_change, RISING); //CHANGE RISING FALLING LOW
+  EICRA |= 3;    // set wanted flags (RISING level interrupt)
+  EIMSK |= 1;     // enable it D2 | D3 INT1
 }
 
 uint16_t nibbles;

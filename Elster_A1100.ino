@@ -2,6 +2,10 @@
   This code is been tested in an Arduino Uno clone wiring a comercial infrared
   sensor in pin 2. it will print to to the serial just when it detects a change 
   in Total Imports, Total exports or a change in direction (0=Importing , 1=Exporting)
+  
+  Based on Dave's code to read an elter a100c for more info on that vist: 
+  http://www.rotwang.co.uk/projects/meter.html
+  Thanks Dave.
 */
 const uint8_t intPin = 2;  //arduino pin number that supports interrupts
 #define BIT_PERIOD 860 // us

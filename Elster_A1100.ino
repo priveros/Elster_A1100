@@ -3,169 +3,140 @@
   sensor in pin 2. it will print to to the serial just when it detects a change 
   in Total Imports, Total exports or a change in direction (0=Importing , 1=Exporting)
   
+  I have tried some IR sensors so far the only one working at the moment is RPM7138-R
+  
   Based on Dave's code to read an elter a100c for more info on that vist: 
   http://www.rotwang.co.uk/projects/meter.html
   Thanks Dave.
 */
-const uint8_t intPin = 2;  //arduino pin number that supports interrupts
+const uint8_t intPin = 2;
 #define BIT_PERIOD 860 // us
 #define BUFF_SIZE 64
 volatile long data[BUFF_SIZE];
 volatile uint8_t in;
 volatile uint8_t out;
 volatile unsigned long last_us;
-uint8_t waiting;
-long lp;
-#define BITS(t) (((t) + (BIT_PERIOD/2)) / BIT_PERIOD)
+uint8_t dbug = 0;
 
-//void on_change(void) { 
- ISR (INT0_vect) {
-  unsigned long us = micros();
-  unsigned long diff = us - last_us;
-  const int PinS = digitalRead(intPin);
-  if (PinS != 0 && diff > 20 ) {
-    last_us = us;
-    int next = in + 1;
-    if (next >= BUFF_SIZE)
-      next = 0;
-    if (diff < 21 * BIT_PERIOD) {
+ISR(INT0_vect) {
+   unsigned long us = micros();
+   unsigned long diff = us - last_us;
+   if (diff > 20 ) {
+      last_us = us;
+      int next = in + 1;
+      if (next >= BUFF_SIZE) next = 0;
       data[in] = diff;
       in = next;
-    }
-  }
-  waiting = 0;
+   }
 }
-
-uint8_t reading = 0;
 
 void setup() {
-  pinMode(intPin, INPUT);
-  in = out = waiting = lp = 0;
-  last_us = micros();
-  Serial.begin(115200);
-  //attachInterrupt(0, on_change, RISING); //CHANGE RISING FALLING LOW
-  EICRA |= 3;    // set wanted flags (RISING level interrupt)
-  EIMSK |= 1;     // enable it D2 | D3 INT1
+    //pinMode(intPin, INPUT);
+    in = out = 0; 
+    Serial.begin(115200);
+    EICRA |= 3;    //RISING interrupt
+    EIMSK |= 1;    
+    if (dbug) Serial.print("Start ........\r\n");
+    last_us = micros();
 }
 
-uint16_t nibbles;
-uint8_t n = 0;
-uint16_t byte_word = 0;
-uint8_t isLowNib = 0;
-
-void loop() {
-  const unsigned long us_lp = micros();
-  if (!decode_buff())
-    return;
-  const long d = us_lp - last_us;
-  if (d > 1000000 & !waiting) {
-    lp++;
-    nibbles = n = 0;
-    waiting = 1;
-    isLowNib = 0;
-    reading = 0;
-    //Serial.print("Waiting ........\r\n");
-  };
-}
-
-
-unsigned char last_4[4];
-unsigned int statusFlags;
+unsigned int statusFlag;
 float imports;
 float exports;
-float last_data;
-const unsigned char match[] = { 0x01, 0x4F, 0x42, 0x02 };
-uint16_t idx;
 
-static int decode_buff(void) {
-  if (in == out)
-    return -1;
-  int next = out + 1;
-  if (next >= BUFF_SIZE)
-    next = 0;
-
-  int p = BITS(data[out]) * 2;
-  //  Serial.print(p);
-  //  Serial.print("\t");
-  for (int i = 1;  i < p; i++) {
-    if ((n & 1)) //
-      nibbles += 1 << (n / 2);
-    if (n + 1 <= 10)
-      n++;
+void loop() {
+//    decode_buff();
+  int rd = decode_buff();
+  if (!rd) return;
+  if (rd==3) {
+   Serial.println("");
+   Serial.print(imports);    Serial.print("\t");
+   Serial.print(exports);    Serial.print("\t");
+   Serial.print(statusFlag); Serial.println("");    
   }
-  if (n + 1 <= 10)
-    n++;
-  nibbles = nibbles & 15;
-  //  Serial.print(n);
-  //  Serial.print("\t");
-  //  Serial.println(nibbles);
-  if (n >= 10) {
-    //    Serial.println(nibbles,BIN);
-    if (!isLowNib) {
-      isLowNib = 1;
-      byte_word = 0;
-      byte_word += nibbles;
-    } else {
-      isLowNib = 0;
-      byte_word += nibbles << 4;
-      //      Serial.println(lp);
-      //      Serial.print(byte_word,HEX);
-      
-      if (!reading) {
-        last_4[0] = last_4[1];
-        last_4[1] = last_4[2];
-        last_4[2] = last_4[3];
-        last_4[3] = byte_word;
-        if (memcmp(match, last_4, sizeof(match)) == 0) {
-          idx = 0;
-          reading = 1;
-        }
-      } else {
-        idx++;
-        if (idx>=91 && idx<=97)  
-          imports += ((float)byte_word-48) * pow(10 , (97 - idx));
-        if (idx==99) 
-          imports += ((float)byte_word-48) / 10;
-        if (idx>=110 && idx<=116) 
-          exports += ((char)byte_word-48) * pow(10 , (116-idx));
-        if (idx==118) 
-          exports += ((float)byte_word-48) / 10;
-        if (idx==206) {
-          if (last_data != imports + exports + ((byte_word-48)>>3)) {
-            Serial.print(imports);
-            Serial.print("\t");
-            Serial.print(exports);
-            Serial.print("\t");
-            Serial.print((byte_word-48)>>3);  //1=Exporting ; 0=Importing
-            Serial.print("\n");
-          }
-          last_data = imports + exports + ((byte_word-48)>>3);
-          imports = exports = 0;
-        }
-      }
-
-//      if (byte_word == 3)
-//        Serial.print("\n");
-        
-    }
-    nibbles = n = 0;
-  }
-  out = next;
-  return 0;
+//   unsigned long end_time = millis() + 6000;
+//   while (end_time >= millis()) ;
 }
 
-static int buff_print(void) {
-  if (in == out)
-    return -1;
-  int next = out + 1;
-  if (next >= BUFF_SIZE)
-    next = 0;
-  Serial.print(lp);
-  Serial.print("\t");
-  Serial.print(data[out]);
-  Serial.print("\t");
-  Serial.print(BITS(data[out]));
-  Serial.print("\n");
-  out = next;
-  return 0;
+float last_data;
+uint8_t sFlag;
+float imps;
+float exps;
+uint16_t idx=0;
+uint8_t byt_msg = 0;
+uint8_t bit_left = 0;
+uint8_t bit_shft = 0;
+uint8_t pSum = 0;
+uint16_t BCC = 0;
+uint8_t eom = 1;
+
+static int decode_buff(void) {
+   if (in == out) return 0;
+   int next = out + 1;
+   if (next >= BUFF_SIZE) next = 0;
+   int p = (((data[out]) + (BIT_PERIOD/2)) / BIT_PERIOD);
+   if (dbug) { Serial.print(data[out]); Serial.print(" "); if (p>500) Serial.println("<-"); }   
+   if (p>500) {
+     idx = BCC = eom = imps = exps = sFlag = 0;   
+     out = next;
+     return 0;
+   }
+   bit_left = (4 - (pSum % 5));
+   bit_shft = (bit_left<p)? bit_left : p;
+   pSum = (pSum==10)? p : ((pSum+p>10)? 10: pSum + p);
+   if (eom==2 && pSum>=7) {
+      pSum=pSum==7?11:10;
+      eom=0;   
+   }
+
+   if (bit_shft>0) {
+      byt_msg >>= bit_shft;
+      if (p==2) byt_msg += 0x40<<(p-bit_shft);
+      if (p==3) byt_msg += 0x60<<(p-bit_shft);
+      if (p==4) byt_msg += 0x70<<(p-bit_shft);   
+      if (p>=5) byt_msg += 0xF0;
+    }
+//    Serial.print(p); Serial.print(" ");Serial.print(pSum);Serial.print(" ");    
+//    Serial.print(bit_left);Serial.print(" ");Serial.print(bit_shft);Serial.print(" ");    
+//    Serial.println(byt_msg,BIN);
+    if (pSum >= 10) {
+       idx++;
+       if (idx!=328) BCC=(BCC+byt_msg)&255;
+//       if (dbug){Serial.print("[");Serial.print(idx);Serial.print(":");Serial.print(byt_msg,HEX); Serial.print("]");}
+       if (idx>=95 && idx<=101)  
+          imps += ((float)byt_msg-48) * pow(10 , (101 - idx));
+       if (idx==103) 
+          imps += ((float)byt_msg-48) / 10;
+       if (idx>=114 && idx<=120) 
+          exps += ((float)byt_msg-48) * pow(10 , (120-idx));
+       if (idx==122) 
+          exps += ((float)byt_msg-48) / 10;
+       if (idx==210) 
+          sFlag = (byt_msg-48)>>3; //1=Exporting ; 0=Importing
+       if (byt_msg == 3) eom=2; 
+       if (idx==328) {
+          if ((byt_msg>>(pSum==10?1:2))==((~BCC)&0x7F)) {
+             if (last_data != (imps + exps + sFlag)) {
+                imports=imps;
+                exports=exps;
+                statusFlag=sFlag;
+                last_data = imps + exps + sFlag;
+                out = next;
+                return 3;
+             }
+          }
+          if (dbug) {
+             Serial.println(""); Serial.print("---->>>>");
+             Serial.print(imps); Serial.print("\t");
+             Serial.print(exps); Serial.print("\t");
+             Serial.print(sFlag); Serial.print("\t"); 
+             Serial.print(pSum); Serial.print("\t");              
+             Serial.print(byt_msg>>(pSum==10?1:2),BIN); Serial.print("\t"); //BCC
+             Serial.print((~BCC)&0x7F,BIN); Serial.print("\t"); //BCC             
+
+          }
+       }  
+    }
+    out = next;
+    return 0;
 }

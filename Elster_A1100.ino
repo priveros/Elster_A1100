@@ -115,7 +115,7 @@ static int decode_buff(void) {
           sFlag = (byt_msg-48)>>3; //1=Exporting ; 0=Importing
        if (byt_msg == 3) eom=2; 
        if (idx==328) {
-          if ((byt_msg>>(pSum==10?1:2))==((~BCC)&0x7F)) {
+          if ((byt_msg>>(pSum==10?(((~BCC)&0b1000000)?0:1):2))==((~BCC)&0x7F)) {
              if (last_data != (imps + exps + sFlag)) {
                 imports=imps;
                 exports=exps;

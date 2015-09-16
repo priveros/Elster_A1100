@@ -49,6 +49,7 @@ void loop() {
   int rd = decode_buff();
   if (!rd) return;
   if (rd==3) {
+   rd=4; 
    Serial.println("");
    Serial.print(imports);    Serial.print("\t");
    Serial.print(exports);    Serial.print("\t");

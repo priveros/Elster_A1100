@@ -7,3 +7,7 @@ http://www.jaycar.com.au/Active-Components/Optoelectronics/Optocouplers/5mm-Infr
  
 some info here :
 http://forums.whirlpool.net.au/forum-replies.cfm?t=2291936&p=2
+
+I'm writting my notes on the project here:
+https://pedrosnotes.wordpress.com/2015/09/26/decoding-electricity-meter-elster-a1100-first-steps/
+
